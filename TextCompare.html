@@ -1,0 +1,977 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Text Comparison Tool (Tracked Changes .docx)</title>
+  <style>
+    :root{
+      --bg:#0b0e14; --panel:#121826; --panel2:#0f1522; --border:#23304a;
+      --text:#e8eefc; --muted:#9fb0d0; --accent:#7aa2ff;
+      --insBg: rgba(69, 255, 158, 0.22);
+      --delBg: rgba(255, 90, 90, 0.22);
+      --btn:#1b2540; --btn2:#243155; --danger:#ff5a5a;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: radial-gradient(1100px 700px at 20% 10%, #162142 0%, var(--bg) 55%);
+      color:var(--text);
+    }
+    header{
+      padding:14px 18px;
+      border-bottom:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0));
+      position:sticky; top:0; z-index:10;
+    }
+    header h1{margin:0; font-size:16px; letter-spacing:.4px; font-weight:650}
+    header .sub{color:var(--muted); font-size:12px}
+    .wrap{
+      height: calc(100vh - 56px);
+      display:flex;
+      flex-direction:column;
+    }
+    .main{
+      flex:1;
+      display:flex;
+      gap:12px;
+      padding:12px;
+      min-height:0;
+    }
+    .left, .right{
+      border:1px solid var(--border);
+      border-radius:12px;
+      overflow:hidden;
+      background: rgba(255,255,255,0.02);
+      min-height:0;
+    }
+    .left{flex:1; display:flex; flex-direction:column; gap:12px; padding:12px; min-width: 420px;}
+    .right{flex:1; display:flex; flex-direction:column; min-width: 420px;}
+    .panel{
+      border:1px solid var(--border);
+      border-radius:12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0));
+      display:flex; flex-direction:column;
+      min-height:0;
+    }
+    .panelHeader{
+      padding:10px 10px 8px 10px;
+      display:flex; align-items:center; justify-content:space-between;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+      gap:10px;
+    }
+    .panelHeader .title{
+      font-weight:650; font-size:13px; color:var(--text);
+      display:flex; align-items:center; gap:8px;
+    }
+    .panelHeader .btnRow{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;}
+    button, input[type="text"]{
+      border:1px solid rgba(255,255,255,0.10);
+      background: var(--btn);
+      color:var(--text);
+      border-radius:10px;
+      padding:7px 10px;
+      font-size:12px;
+      outline:none;
+    }
+    button:hover{background: var(--btn2); cursor:pointer}
+    button:disabled{opacity:.5; cursor:not-allowed}
+    button.danger{border-color: rgba(255,90,90,0.35); background: rgba(255,90,90,0.12)}
+    button.danger:hover{background: rgba(255,90,90,0.18)}
+    .panelBody{padding:10px; min-height:0; display:flex; flex-direction:column; gap:8px;}
+    textarea{
+      width:100%;
+      min-height:170px;
+      resize:vertical;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.10);
+      background: rgba(0,0,0,0.25);
+      color:var(--text);
+      padding:10px;
+      font-size:13px;
+      line-height:1.35;
+      outline:none;
+      /* Word wrap ON (keep newlines, wrap long lines) */
+      white-space:pre-wrap;
+      word-break:break-word;
+      overflow-wrap:anywhere;
+    }
+    .count{color:var(--muted); font-size:12px; padding:0 2px 2px 2px;}
+    .rightHeader{
+      padding:10px;
+      display:flex; align-items:center; justify-content:space-between;
+      border-bottom:1px solid var(--border);
+      gap:10px;
+    }
+    .rightHeader .title{font-weight:650; font-size:13px}
+    .rightHeader .btnRow{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;}
+    .preview{
+      flex:1;
+      padding:12px;
+      overflow:auto;
+      min-height:0;
+      background: rgba(0,0,0,0.18);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size:13px;
+      line-height:1.45;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+    .preview .eq{color: var(--text)}
+    .preview del{
+      background: var(--delBg);
+      text-decoration: line-through;
+      padding: 0 2px;
+      border-radius:6px;
+    }
+    .preview ins{
+      background: var(--insBg);
+      text-decoration: underline;
+      padding: 0 2px;
+      border-radius:6px;
+    }
+    .controls{
+      border-top:1px solid var(--border);
+      padding:10px 12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      background: rgba(255,255,255,0.02);
+    }
+    .controls .leftCtl{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .controls label{font-size:12px; color:var(--muted)}
+    .controls .radio{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      padding:6px 10px; border:1px solid rgba(255,255,255,0.10);
+      border-radius:12px; background: rgba(0,0,0,0.18);
+    }
+    .controls .radio label{color:var(--text)}
+    input[type="radio"]{transform: translateY(1px)}
+    .status{
+      font-size:12px;
+      color:var(--muted);
+      max-width: 45%;
+      text-align:right;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .docBtn{
+      background: rgba(122,162,255,0.18);
+      border-color: rgba(122,162,255,0.35);
+      font-weight:650;
+    }
+    .docBtn:hover{background: rgba(122,162,255,0.26)}
+    @media (max-width: 980px){
+      .main{flex-direction:column}
+      .left,.right{min-width:auto}
+      .status{max-width: 100%; text-align:left}
+      .controls{flex-direction:column; align-items:stretch}
+      .controls .rightCtl{display:flex; justify-content:flex-start}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Text Comparison Tool · Tracked Changes (.docx)</h1>
+      <div class="sub">Browser-only. No server. No build. Just you, your text, and consequences.</div>
+    </div>
+    <div class="sub" id="zipStatus">JSZip: loading…</div>
+  </header>
+
+  <div class="wrap">
+    <div class="main">
+      <div class="left">
+        <div class="panel" id="origPanel">
+          <div class="panelHeader">
+            <div class="title">Original Text</div>
+            <div class="btnRow">
+              <button id="origLoad">Load</button>
+              <button id="origPaste">Paste</button>
+              <button class="danger" id="origClear">Clear</button>
+            </div>
+          </div>
+          <div class="panelBody">
+            <textarea id="origText" spellcheck="false" placeholder="Paste or load the original text…"></textarea>
+            <div class="count"><span id="origCount">0</span> characters</div>
+          </div>
+        </div>
+
+        <div class="panel" id="modPanel">
+          <div class="panelHeader">
+            <div class="title">Modified Text</div>
+            <div class="btnRow">
+              <button id="modLoad">Load</button>
+              <button id="modPaste">Paste</button>
+              <button class="danger" id="modClear">Clear</button>
+            </div>
+          </div>
+          <div class="panelBody">
+            <textarea id="modText" spellcheck="false" placeholder="Paste or load the modified text…"></textarea>
+            <div class="count"><span id="modCount">0</span> characters</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="rightHeader">
+          <div class="title">Diff Preview</div>
+          <div class="btnRow">
+            <button id="copyTracked">Copy Tracked Changes</button>
+            <button id="copyHard">Copy Hard</button>
+            <button id="copyClean">Copy Clean</button>
+          </div>
+        </div>
+        <div class="preview" id="preview" aria-label="Diff preview"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="leftCtl">
+        <label for="author">Author:</label>
+        <input type="text" id="author" value="TextComparer" />
+        <div class="radio" role="radiogroup" aria-label="Diff mode">
+          <label><input type="radio" name="mode" value="char" checked> Char</label>
+          <label><input type="radio" name="mode" value="word"> Word</label>
+          <label><input type="radio" name="mode" value="line"> Line</label>
+        </div>
+        <button class="docBtn" id="genDocx">Generate Word Document</button>
+      </div>
+      <div class="status" id="status">Ready.</div>
+    </div>
+  </div>
+
+  <!-- Only external dependency allowed -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+  <script>
+    // ---------------------------
+    // Utilities
+    // ---------------------------
+    const $ = (sel) => document.querySelector(sel);
+    const statusEl = $("#status");
+    const zipStatusEl = $("#zipStatus");
+
+    function setStatus(msg, isError=false){
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? "rgba(255,90,90,0.95)" : "var(--muted)";
+    }
+
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function isoNow(){
+      // Word accepts ISO 8601; use local time with Z offset-ish? Keep it simple: UTC Z.
+      return new Date().toISOString();
+    }
+    function tsFilename(){
+      const d = new Date();
+      const y = d.getFullYear();
+      const mo = pad2(d.getMonth()+1);
+      const da = pad2(d.getDate());
+      const hh = pad2(d.getHours());
+      const mm = pad2(d.getMinutes());
+      const ss = pad2(d.getSeconds());
+      return `tracked_changes_${y}${mo}${da}_${hh}${mm}${ss}.docx`;
+    }
+
+    function escapeXml(s){
+      return s
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&apos;");
+    }
+
+    function needsPreserveSpace(s){
+      // If string has leading/trailing space or consecutive spaces, preserve.
+      return /^\s|\s$|  |\t/.test(s);
+    }
+
+    // ---------------------------
+    // Tokenizers (keep '\n' as a token so we can create paragraphs)
+    // ---------------------------
+    function tokenizeChar(text){
+      // keep \n tokens
+      const out = [];
+      for (let i=0;i<text.length;i++){
+        const ch = text[i];
+        if (ch === "\r") continue; // normalize away CR
+        out.push(ch);
+      }
+      return out;
+    }
+
+    function tokenizeLine(text){
+      // split into lines but keep newline tokens
+      const norm = text.replaceAll("\r","");
+      const parts = norm.split("\n");
+      const out = [];
+      for (let i=0;i<parts.length;i++){
+        out.push(parts[i]);
+        if (i !== parts.length-1) out.push("\n");
+      }
+      return out;
+    }
+
+        function tokenizeWord(text){
+          // Word-ish tokens, but attach spaces/tabs to the *previous* token (except across newlines).
+          // This keeps phrase-level changes from exploding into one <ins>/<del> per word.
+          const norm = text.replaceAll("\r","");
+          const out = [];
+          let i=0;
+    
+          const isWordChar = (c) => /[A-Za-z0-9_’']/u.test(c);
+    
+          while (i < norm.length){
+            const c = norm[i];
+    
+            if (c === "\n"){ out.push("\n"); i++; continue; }
+    
+            // spaces/tabs (excluding \n) get glued to previous token when possible
+            if (c === " " || c === "\t"){
+              let j = i + 1;
+              while (j < norm.length && (norm[j] === " " || norm[j] === "\t")) j++;
+              const ws = norm.slice(i, j);
+              const prev = out[out.length - 1];
+              if (prev && prev !== "\n") out[out.length - 1] = prev + ws;
+              else out.push(ws);
+              i = j;
+              continue;
+            }
+    
+            // word chunk
+            if (isWordChar(c)){
+              let j = i + 1;
+              while (j < norm.length && isWordChar(norm[j])) j++;
+              out.push(norm.slice(i, j));
+              i = j;
+              continue;
+            }
+    
+            // punctuation / other single char
+            out.push(c);
+            i++;
+          }
+    
+          return out;
+        }
+
+function tokenize(text, mode){
+      if (mode === "line") return tokenizeLine(text);
+      if (mode === "word") return tokenizeWord(text);
+      return tokenizeChar(text);
+    }
+
+    // ---------------------------
+    // LCS-based diff (inline, no external diff libs)
+    // Returns array of { value, added?, removed? }
+    // ---------------------------
+    function diffLCS(aTokens, bTokens){
+      const n = aTokens.length, m = bTokens.length;
+
+      // DP for LCS length, using Uint16/Uint32-ish arrays
+      // dp[i][j] = LCS length for a[i:] and b[j:]
+      // We'll build bottom-up row by row.
+      const dp = Array(n+1);
+      for (let i=0;i<=n;i++) dp[i] = new Uint32Array(m+1);
+
+      for (let i=n-1;i>=0;i--){
+        const row = dp[i];
+        const rowNext = dp[i+1];
+        for (let j=m-1;j>=0;j--){
+          if (aTokens[i] === bTokens[j]) row[j] = rowNext[j+1] + 1;
+          else row[j] = Math.max(rowNext[j], row[j+1]);
+        }
+      }
+
+      // backtrack
+      const out = [];
+      let i=0, j=0;
+      while (i<n && j<m){
+        if (aTokens[i] === bTokens[j]){
+          out.push({ value: aTokens[i] });
+          i++; j++;
+        } else {
+          // choose direction that keeps LCS longest
+          const down = dp[i+1][j];
+          const right = dp[i][j+1];
+          if (down >= right){
+            out.push({ value: aTokens[i], removed: true });
+            i++;
+          } else {
+            out.push({ value: bTokens[j], added: true });
+            j++;
+          }
+        }
+      }
+      while (i<n){ out.push({ value: aTokens[i], removed: true }); i++; }
+      while (j<m){ out.push({ value: bTokens[j], added: true }); j++; }
+
+      // merge adjacent same-type chunks for cleaner output
+      const merged = [];
+      for (const part of out){
+        const prev = merged[merged.length-1];
+        const sameKind =
+          prev &&
+          !!prev.added === !!part.added &&
+          !!prev.removed === !!part.removed &&
+          (prev.added || prev.removed) === (part.added || part.removed);
+
+        if (sameKind){
+          prev.value += part.value;
+        } else {
+          merged.push({ ...part });
+        }
+      }
+      return merged;
+    }
+
+    function mergeParts(parts){
+      // merge adjacent same-kind parts
+      const merged = [];
+      for (const part of parts){
+        const prev = merged[merged.length-1];
+        const sameKind =
+          prev &&
+          !!prev.added === !!part.added &&
+          !!prev.removed === !!part.removed;
+        if (sameKind){
+          prev.value += part.value;
+        } else {
+          merged.push({ ...part });
+        }
+      }
+      return merged;
+    }
+
+    
+    function tokenizeWordTight(text){
+      // Word-ish tokenizer that keeps whitespace as its own token (newlines preserved).
+      // Used for char-hybrid alignment so replacements stay local and don't "steal" letters from other words.
+      const norm = text.replaceAll("\r","");
+      const out = [];
+      let i = 0;
+      const isWordChar = (c) => /[A-Za-z0-9_’']/u.test(c);
+
+      while (i < norm.length){
+        const c = norm[i];
+
+        if (c === "\n"){ out.push("\n"); i++; continue; }
+
+        // whitespace (excluding \n)
+        if (c === " " || c === "\t"){
+          let j = i + 1;
+          while (j < norm.length && (norm[j] === " " || norm[j] === "\t")) j++;
+          out.push(norm.slice(i, j));
+          i = j;
+          continue;
+        }
+
+        // word chunk
+        if (isWordChar(c)){
+          let j = i + 1;
+          while (j < norm.length && isWordChar(norm[j])) j++;
+          out.push(norm.slice(i, j));
+          i = j;
+          continue;
+        }
+
+        // punctuation / other single char
+        out.push(c);
+        i++;
+      }
+      return out;
+    }
+
+    function isWordToken(tok){
+      // "word" here means no whitespace and composed of word chars only.
+      // (We keep punctuation separate, so this is reliable.)
+      return tok && !/[\s]/u.test(tok) && /^[A-Za-z0-9_’']+$/u.test(tok);
+    }
+
+    function computeCharHybrid(a, b){
+      // Hybrid strategy:
+      // 1) Align on tight "word-ish" tokens (whitespace preserved as tokens) to keep edits local.
+      // 2) Only do char-level diff inside *paired word tokens* (e.g., typo fixes),
+      //    not across whole replacement spans (which causes the LCS to match letters across different words).
+      const aT = tokenizeWordTight(a);
+      const bT = tokenizeWordTight(b);
+
+      const parts = diffLCS(aT, bT);
+
+      const out = [];
+      for (let i = 0; i < parts.length; i++){
+        const p = parts[i];
+        const next = parts[i+1];
+
+        // If we see removed+added adjacent and both look like word tokens, do a local char diff.
+        if (p && next && p.removed && next.added && isWordToken(p.value) && isWordToken(next.value)){
+          const cParts = diffLCS(tokenizeChar(p.value), tokenizeChar(next.value));
+          out.push(...cParts);
+          i++; // consume next
+          continue;
+        }
+        // handle the other ordering too
+        if (p && next && p.added && next.removed && isWordToken(p.value) && isWordToken(next.value)){
+          const cParts = diffLCS(tokenizeChar(next.value), tokenizeChar(p.value));
+          out.push(...cParts);
+          i++; // consume next
+          continue;
+        }
+
+        out.push(p);
+      }
+
+      return mergeParts(out);
+    }
+
+
+    function computeDiff(){
+      const mode = document.querySelector('input[name="mode"]:checked').value;
+      const a = $("#origText").value || "";
+      const b = $("#modText").value || "";
+      if (mode === "char"){
+        return computeCharHybrid(a, b);
+      }
+      const aTok = tokenize(a, mode);
+      const bTok = tokenize(b, mode);
+      return diffLCS(aTok, bTok);
+    }
+
+    // ---------------------------
+    // Preview rendering (preserve whitespace/line breaks)
+    // ---------------------------
+    function renderPreview(parts){
+      // Use <ins>/<del> so it copies cleanly too
+      const frag = document.createDocumentFragment();
+
+      for (const p of parts){
+        if (p.added){
+          const el = document.createElement("ins");
+          el.textContent = p.value;
+          frag.appendChild(el);
+        } else if (p.removed){
+          const el = document.createElement("del");
+          el.textContent = p.value;
+          frag.appendChild(el);
+        } else {
+          const span = document.createElement("span");
+          span.className = "eq";
+          span.textContent = p.value;
+          frag.appendChild(span);
+        }
+      }
+
+      const preview = $("#preview");
+      preview.innerHTML = "";
+      preview.appendChild(frag);
+    }
+
+    function updateCounts(){
+      $("#origCount").textContent = ($("#origText").value || "").length;
+      $("#modCount").textContent = ($("#modText").value || "").length;
+    }
+
+    let lastParts = [];
+    function refresh(){
+      updateCounts();
+      lastParts = computeDiff();
+      renderPreview(lastParts);
+    }
+
+    // ---------------------------
+    // Clipboard copy helpers
+    // ---------------------------
+    function copyHtmlToClipboard(html){
+      const tmp = document.createElement("div");
+      tmp.contentEditable = "true";
+      tmp.style.position = "fixed";
+      tmp.style.left = "-9999px";
+      tmp.style.top = "0";
+      tmp.style.opacity = "0";
+      tmp.innerHTML = html;
+      document.body.appendChild(tmp);
+
+      const range = document.createRange();
+      range.selectNodeContents(tmp);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      let ok = false;
+      try{
+        ok = document.execCommand("copy");
+      }catch(e){
+        ok = false;
+      }
+      sel.removeAllRanges();
+      document.body.removeChild(tmp);
+      return ok;
+    }
+
+    function buildCopyHtmlTracked(parts){
+      // <ins>/<del> tags, minimal inline styles so Word tends to keep formatting on paste
+      // Note: This is NOT true tracked changes metadata. It's just visual markup.
+      // Word typically renders <ins>/<del> with underline/strikethrough when pasted as HTML.
+      let html = `<div style="white-space:pre-wrap;font-family:Calibri,Arial,sans-serif;font-size:11pt;">`;
+      for (const p of parts){
+        const t = escapeXml(p.value).replaceAll("\n","<br>");
+        if (p.added){
+          html += `<ins style="text-decoration:underline;background:rgba(69,255,158,0.22);">${t}</ins>`;
+        } else if (p.removed){
+          html += `<del style="text-decoration:line-through;background:rgba(255,90,90,0.22);">${t}</del>`;
+        } else {
+          html += `<span>${t}</span>`;
+        }
+      }
+      html += `</div>`;
+      return html;
+    }
+
+    function buildCopyHtmlHard(parts){
+      // Hard formatting via <u> and <strike>, no semantics
+      let html = `<div style="white-space:pre-wrap;font-family:Calibri,Arial,sans-serif;font-size:11pt;">`;
+      for (const p of parts){
+        const t = escapeXml(p.value).replaceAll("\n","<br>");
+        if (p.added){
+          html += `<u style="background:rgba(69,255,158,0.22);">${t}</u>`;
+        } else if (p.removed){
+          html += `<strike style="background:rgba(255,90,90,0.22);">${t}</strike>`;
+        } else {
+          html += `<span>${t}</span>`;
+        }
+      }
+      html += `</div>`;
+      return html;
+    }
+
+
+    function buildCleanText(parts){
+      // "Accept all changes": keep added + unchanged, drop removed.
+      // Preserve whitespace and line breaks exactly as represented in the diff parts.
+      let out = "";
+      for (const p of parts){
+        if (p && p.removed) continue;
+        out += (p?.value ?? "");
+      }
+      return out;
+    }
+
+    async function copyTextToClipboard(text){
+      // Prefer modern clipboard API; fall back to execCommand for older browsers / file:// quirks.
+      try{
+        if (navigator.clipboard && navigator.clipboard.writeText){
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      }catch(e){ /* fall through */ }
+
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      ta.style.top = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try{
+        ok = document.execCommand("copy");
+      }catch(e){
+        ok = false;
+      }
+      document.body.removeChild(ta);
+      return ok;
+    }
+
+    // ---------------------------
+    // DOCX generation with OOXML tracked changes
+    // ---------------------------
+    function buildRunsForValue(tag, text){
+      // tag: 't' or 'delText'
+      // Split long text into chunks that are safe; Word is fine with big runs, but keep it sane.
+      const chunks = [];
+      const max = 2000;
+      for (let i=0;i<text.length;i+=max){
+        chunks.push(text.slice(i,i+max));
+      }
+      return chunks.map(ch => {
+        const xmlSpace = needsPreserveSpace(ch) ? ` xml:space="preserve"` : ``;
+        return `<w:${tag}${xmlSpace}>${escapeXml(ch)}</w:${tag}>`;
+      }).join("");
+    }
+
+    function partsToDocumentXml(parts, author){
+      // Build paragraphs based on '\n' in the diff stream.
+      // Within a paragraph, normal text => <w:r><w:t>...</w:t></w:r>
+      // Insertions => <w:ins ...><w:r><w:t>...</w:t></w:r></w:ins>
+      // Deletions => <w:del ...><w:r><w:delText>...</w:delText></w:r></w:del>
+      const date = isoNow();
+      let changeId = 1;
+
+      function wrapNormal(text){
+        if (text === "") return "";
+        return `<w:r>${buildRunsForValue("t", text)}</w:r>`;
+      }
+      function wrapIns(text){
+        if (text === "") return "";
+        const id = changeId++;
+        return `<w:ins w:id="${id}" w:author="${escapeXml(author)}" w:date="${date}"><w:r>${buildRunsForValue("t", text)}</w:r></w:ins>`;
+      }
+      function wrapDel(text){
+        if (text === "") return "";
+        const id = changeId++;
+        return `<w:del w:id="${id}" w:author="${escapeXml(author)}" w:date="${date}"><w:r>${buildRunsForValue("delText", text)}</w:r></w:del>`;
+      }
+
+      const paragraphs = [];
+      let currentRuns = "";
+
+      function flushPara(){
+        // Always create at least an empty paragraph if nothing in it
+        paragraphs.push(
+          `<w:p><w:pPr></w:pPr>${currentRuns || `<w:r><w:t></w:t></w:r>`}</w:p>`
+        );
+        currentRuns = "";
+      }
+
+      function emitText(kind, txt){
+        // split by '\n' to paragraphs
+        const segments = txt.split("\n");
+        for (let i=0;i<segments.length;i++){
+          const seg = segments[i];
+          if (seg){
+            if (kind === "ins") currentRuns += wrapIns(seg);
+            else if (kind === "del") currentRuns += wrapDel(seg);
+            else currentRuns += wrapNormal(seg);
+          }
+          if (i !== segments.length-1){
+            flushPara();
+          }
+        }
+      }
+
+      // We normalized CR away in tokenizers, but keep safe
+      for (const p of parts){
+        const v = (p.value || "").replaceAll("\r","");
+        if (p.added) emitText("ins", v);
+        else if (p.removed) emitText("del", v);
+        else emitText("eq", v);
+      }
+      flushPara();
+
+      const body = paragraphs.join("");
+
+      // Minimal WordprocessingML doc with required namespaces
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+ xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+ xmlns:v="urn:schemas-microsoft-com:vml"
+ xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+ xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+ xmlns:w10="urn:schemas-microsoft-com:office:word"
+ xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
+ xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
+ xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
+ xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+ xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+ mc:Ignorable="w14 wp14">
+  <w:body>
+    ${body}
+    <w:sectPr>
+      <w:pgSz w:w="12240" w:h="15840"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>
+      <w:cols w:space="720"/>
+      <w:docGrid w:linePitch="360"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+    }
+
+    function settingsXml(){
+      // track revisions enabled
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ mc:Ignorable="w14">
+  <w:trackRevisions/>
+  <w:zoom w:val="100"/>
+  <w:compat/>
+</w:settings>`;
+    }
+
+    function stylesXml(){
+      // Minimal default styles so Word doesn't get weird
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:qFormat/>
+    <w:rPr>
+      <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>
+      <w:sz w:val="22"/>
+    </w:rPr>
+  </w:style>
+</w:styles>`;
+    }
+
+    function contentTypesXml(){
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+</Types>`;
+    }
+
+    function relsXml(){
+      // package rels
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+    }
+
+    function docRelsXml(){
+      // document rels
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
+</Relationships>`;
+    }
+
+    async function generateDocx(parts){
+      if (!window.JSZip) throw new Error("JSZip is not available.");
+      const author = ($("#author").value || "TextComparer").trim() || "TextComparer";
+      const zip = new JSZip();
+
+      zip.file("[Content_Types].xml", contentTypesXml());
+      zip.folder("_rels").file(".rels", relsXml());
+
+      const word = zip.folder("word");
+      word.file("document.xml", partsToDocumentXml(parts, author));
+      word.file("styles.xml", stylesXml());
+      word.file("settings.xml", settingsXml());
+      word.folder("_rels").file("document.xml.rels", docRelsXml());
+
+      const blob = await zip.generateAsync({ type: "blob" });
+
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = tsFilename();
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 1500);
+    }
+
+    // ---------------------------
+    // File operations
+    // ---------------------------
+    function makeFilePicker(onLoad){
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".txt,.md,text/plain,text/markdown";
+      input.addEventListener("change", async () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const text = await file.text();
+        onLoad(text);
+        refresh();
+      });
+      input.click();
+    }
+
+    async function pasteInto(textarea){
+      try{
+        const t = await navigator.clipboard.readText();
+        textarea.value = t;
+        refresh();
+        setStatus("Pasted from clipboard.");
+      }catch(e){
+        setStatus("Clipboard paste blocked by browser permissions.", true);
+      }
+    }
+
+    // ---------------------------
+    // Wire up UI
+    // ---------------------------
+    function init(){
+      if (window.JSZip) zipStatusEl.textContent = "JSZip: ready";
+      else zipStatusEl.textContent = "JSZip: not loaded";
+
+      $("#origText").addEventListener("input", refresh);
+      $("#modText").addEventListener("input", refresh);
+      document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener("change", refresh));
+
+      $("#origLoad").addEventListener("click", () => makeFilePicker((t)=> $("#origText").value = t));
+      $("#modLoad").addEventListener("click", () => makeFilePicker((t)=> $("#modText").value = t));
+
+      $("#origPaste").addEventListener("click", () => pasteInto($("#origText")));
+      $("#modPaste").addEventListener("click", () => pasteInto($("#modText")));
+
+      $("#origClear").addEventListener("click", () => { $("#origText").value = ""; refresh(); });
+      $("#modClear").addEventListener("click", () => { $("#modText").value = ""; refresh(); });
+
+      $("#copyTracked").addEventListener("click", () => {
+        const html = buildCopyHtmlTracked(lastParts);
+        const ok = copyHtmlToClipboard(html);
+        setStatus(ok ? "Copied (tracked-ish HTML with <ins>/<del>)."
+                     : "Copy failed. Browser said no.", !ok);
+      });
+
+      $("#copyHard").addEventListener("click", () => {
+        const html = buildCopyHtmlHard(lastParts);
+        const ok = copyHtmlToClipboard(html);
+        setStatus(ok ? "Copied (hard formatting with <u>/<strike>)."
+                     : "Copy failed. Browser said no.", !ok);
+      });
+
+      $("#copyClean").addEventListener("click", async () => {
+        const text = buildCleanText(lastParts);
+        const ok = await copyTextToClipboard(text);
+        setStatus(ok ? "Copied (clean, changes accepted)." : "Copy failed. Browser said no.", !ok);
+      });
+
+
+      $("#genDocx").addEventListener("click", async () => {
+        try{
+          if (!window.JSZip){
+            setStatus("JSZip not loaded. Check your network or the CDN.", true);
+            return;
+          }
+          setStatus("Generating .docx…");
+          await generateDocx(lastParts);
+          setStatus("Downloaded .docx with tracked changes.");
+        }catch(e){
+          setStatus("Failed to generate .docx: " + (e?.message || String(e)), true);
+        }
+      });
+
+      refresh();
+      setStatus("Ready.");
+    }
+
+    // Defer init until JSZip is present (but don't be dramatic about it).
+    window.addEventListener("load", init);
+  </script>
+</body>
+</html>
