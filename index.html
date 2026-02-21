@@ -154,6 +154,8 @@
     }
     .controls .radio label{color:var(--text)}
     input[type="radio"]{transform: translateY(1px)}
+    .controls .toggles .toggleLabel{font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px;cursor:pointer;}
+    input[type="checkbox"]{transform: translateY(1px)}
     .status{
       font-size:12px;
       color:var(--muted);
@@ -242,6 +244,10 @@
           <label><input type="radio" name="mode" value="char" checked> Char</label>
           <label><input type="radio" name="mode" value="word"> Word</label>
           <label><input type="radio" name="mode" value="line"> Line</label>
+        </div>
+        <div class="toggles" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <label class="toggleLabel"><input type="checkbox" id="ignoreCase" checked> Ignore capitalization</label>
+          <label class="toggleLabel"><input type="checkbox" id="ignoreWhitespace" checked> Ignore whitespace</label>
         </div>
         <button class="docBtn" id="genDocx">Generate Word Document</button>
       </div>
@@ -371,10 +377,26 @@ function tokenize(text, mode){
     }
 
     // ---------------------------
+    // Comparison normalizer (for ignore case / ignore whitespace)
+    // ---------------------------
+    function makeNormalizer(ignoreCase, ignoreWhitespace){
+      return function norm(token){
+        let s = String(token);
+        if (ignoreWhitespace) s = s.replace(/\s+/g, " ").trim();
+        if (ignoreCase) s = s.toLowerCase();
+        return s;
+      };
+    }
+
+    // ---------------------------
     // LCS-based diff (inline, no external diff libs)
     // Returns array of { value, added?, removed? }
+    // normalizer(token) => string for equality; if omitted, use strict ===
     // ---------------------------
-    function diffLCS(aTokens, bTokens){
+    function diffLCS(aTokens, bTokens, normalizer){
+      const eq = normalizer
+        ? (a, b) => normalizer(a) === normalizer(b)
+        : (a, b) => a === b;
       const n = aTokens.length, m = bTokens.length;
 
       // DP for LCS length, using Uint16/Uint32-ish arrays
@@ -387,7 +409,7 @@ function tokenize(text, mode){
         const row = dp[i];
         const rowNext = dp[i+1];
         for (let j=m-1;j>=0;j--){
-          if (aTokens[i] === bTokens[j]) row[j] = rowNext[j+1] + 1;
+          if (eq(aTokens[i], bTokens[j])) row[j] = rowNext[j+1] + 1;
           else row[j] = Math.max(rowNext[j], row[j+1]);
         }
       }
@@ -396,7 +418,7 @@ function tokenize(text, mode){
       const out = [];
       let i=0, j=0;
       while (i<n && j<m){
-        if (aTokens[i] === bTokens[j]){
+        if (eq(aTokens[i], bTokens[j])){
           out.push({ value: aTokens[i] });
           i++; j++;
         } else {
@@ -497,7 +519,7 @@ function tokenize(text, mode){
       return tok && !/[\s]/u.test(tok) && /^[A-Za-z0-9_’']+$/u.test(tok);
     }
 
-    function computeCharHybrid(a, b){
+    function computeCharHybrid(a, b, normalizer){
       // Hybrid strategy:
       // 1) Align on tight "word-ish" tokens (whitespace preserved as tokens) to keep edits local.
       // 2) Only do char-level diff inside *paired word tokens* (e.g., typo fixes),
@@ -505,7 +527,7 @@ function tokenize(text, mode){
       const aT = tokenizeWordTight(a);
       const bT = tokenizeWordTight(b);
 
-      const parts = diffLCS(aT, bT);
+      const parts = diffLCS(aT, bT, normalizer);
 
       const out = [];
       for (let i = 0; i < parts.length; i++){
@@ -514,14 +536,14 @@ function tokenize(text, mode){
 
         // If we see removed+added adjacent and both look like word tokens, do a local char diff.
         if (p && next && p.removed && next.added && isWordToken(p.value) && isWordToken(next.value)){
-          const cParts = diffLCS(tokenizeChar(p.value), tokenizeChar(next.value));
+          const cParts = diffLCS(tokenizeChar(p.value), tokenizeChar(next.value), normalizer);
           out.push(...cParts);
           i++; // consume next
           continue;
         }
         // handle the other ordering too
         if (p && next && p.added && next.removed && isWordToken(p.value) && isWordToken(next.value)){
-          const cParts = diffLCS(tokenizeChar(next.value), tokenizeChar(p.value));
+          const cParts = diffLCS(tokenizeChar(next.value), tokenizeChar(p.value), normalizer);
           out.push(...cParts);
           i++; // consume next
           continue;
@@ -536,14 +558,17 @@ function tokenize(text, mode){
 
     function computeDiff(){
       const mode = document.querySelector('input[name="mode"]:checked').value;
+      const ignoreCase = $("#ignoreCase").checked;
+      const ignoreWhitespace = $("#ignoreWhitespace").checked;
+      const normalizer = (ignoreCase || ignoreWhitespace) ? makeNormalizer(ignoreCase, ignoreWhitespace) : null;
       const a = $("#origText").value || "";
       const b = $("#modText").value || "";
       if (mode === "char"){
-        return computeCharHybrid(a, b);
+        return computeCharHybrid(a, b, normalizer);
       }
       const aTok = tokenize(a, mode);
       const bTok = tokenize(b, mode);
-      return diffLCS(aTok, bTok);
+      return diffLCS(aTok, bTok, normalizer);
     }
 
     // ---------------------------
@@ -921,6 +946,8 @@ function tokenize(text, mode){
       $("#origText").addEventListener("input", refresh);
       $("#modText").addEventListener("input", refresh);
       document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener("change", refresh));
+      $("#ignoreCase").addEventListener("change", refresh);
+      $("#ignoreWhitespace").addEventListener("change", refresh);
 
       $("#origLoad").addEventListener("click", () => makeFilePicker((t)=> $("#origText").value = t));
       $("#modLoad").addEventListener("click", () => makeFilePicker((t)=> $("#modText").value = t));
