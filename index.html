@@ -1138,15 +1138,22 @@ function tokenize(text, mode){
     // ---------------------------
     const SPACES_PER_INCH = 16; // one Word tab stop (0.5") -> 8 spaces
 
-    function cssLenToInches(v){
-      if (!v) return 0;
-      const m = String(v).trim().match(/^(-?(?:\d+\.?\d*|\.\d+))(in|pt|px|cm|mm|pc|em)?$/i);
-      if (!m) return 0;
-      const per = { in:1, pt:1/72, px:1/96, cm:1/2.54, mm:1/25.4, pc:1/6, em:12/72 };
-      return parseFloat(m[1]) * (per[(m[2] || "in").toLowerCase()] ?? 1);
-    }
-
     const NBSP_RE = new RegExp(String.fromCharCode(160), "g"); // non-breaking space
+
+    function sanitizeClipboardHtml(html){
+      // Parse inertly, strip anything executable, return markup safe to render.
+      let doc;
+      try{ doc = new DOMParser().parseFromString(String(html), "text/html"); }
+      catch(e){ return null; }
+      if (!doc || !doc.documentElement) return null;
+      doc.querySelectorAll("script,iframe,object,embed,link").forEach(el => el.remove());
+      for (const el of doc.querySelectorAll("*")){
+        for (const attr of [...el.attributes]){
+          if (/^on/i.test(attr.name) || /^\s*javascript:/i.test(attr.value)) el.removeAttribute(attr.name);
+        }
+      }
+      return doc.documentElement.outerHTML;
+    }
 
     function extractInlineText(node){
       // textContent, but with <br> as newline and HTML-source line wraps collapsed
@@ -1161,40 +1168,68 @@ function tokenize(text, mode){
     }
 
     function htmlClipboardToText(html){
-      let doc;
-      try{ doc = new DOMParser().parseFromString(html, "text/html"); }
-      catch(e){ return ""; }
-      if (!doc || !doc.body) return "";
+      // Render the clipboard HTML in a hidden iframe and measure each paragraph's
+      // actual layout position. This resolves indents no matter where they're
+      // defined: inline styles, named Word styles in the <style> block, or
+      // inherited/nested structures.
+      const safe = sanitizeClipboardHtml(html);
+      if (!safe) return "";
+
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.style.cssText = "position:fixed;left:-10000px;top:0;width:816px;height:100px;visibility:hidden;border:0;";
+      document.body.appendChild(iframe);
       try{
-        doc.body.querySelectorAll("style,script,link,meta,title,xml,o\\:p").forEach(el => el.remove());
-      }catch(e){ /* exotic selectors can throw; content removal is best-effort */ }
+        const idoc = iframe.contentDocument;
+        idoc.open(); idoc.write(safe); idoc.close();
+        const body = idoc.body;
+        if (!body) return "";
+        try{
+          body.querySelectorAll("o\\:p").forEach(el => el.remove());
+        }catch(e){ /* best-effort */ }
 
-      let blocks = [...doc.body.querySelectorAll("p,li,h1,h2,h3,h4,h5,h6,pre,tr")];
-      blocks = blocks.filter(b => !blocks.some(o => o !== b && o.contains(b)));
-      if (!blocks.length) blocks = [doc.body];
+        const win = idoc.defaultView;
+        const bodyRect = body.getBoundingClientRect();
+        const bodyCS = win.getComputedStyle(body);
+        const baseLeft = bodyRect.left
+          + (parseFloat(bodyCS.borderLeftWidth) || 0)
+          + (parseFloat(bodyCS.paddingLeft) || 0);
+        const pxToSpaces = (px) => Math.max(0, Math.round(px / 96 * SPACES_PER_INCH));
 
-      const lines = [];
-      for (const b of blocks){
-        if (b.nodeName === "PRE"){
-          lines.push(...b.textContent.replace(/\r/g, "").split("\n"));
-          continue;
+        let blocks = [...body.querySelectorAll("p,li,h1,h2,h3,h4,h5,h6,pre,tr")];
+        blocks = blocks.filter(b => !blocks.some(o => o !== b && o.contains(b)));
+        if (!blocks.length) blocks = [body];
+
+        const lines = [];
+        for (const b of blocks){
+          if (b.nodeName === "PRE"){
+            lines.push(...b.textContent.replace(/\r/g, "").split("\n"));
+            continue;
+          }
+          let text, leftPx = 0, tiPx = 0;
+          if (b.nodeName === "TR"){
+            text = [...b.cells].map(c => extractInlineText(c).replace(NBSP_RE, " ").trim()).join("\t");
+          } else {
+            text = extractInlineText(b);
+            if (b !== body){
+              const cs = win.getComputedStyle(b);
+              leftPx = b.getBoundingClientRect().left - baseLeft;
+              tiPx = parseFloat(cs.textIndent) || 0;
+            }
+          }
+          const firstIndent = pxToSpaces(leftPx + tiPx);
+          const restIndent = pxToSpaces(leftPx);
+          const sub = text.split("\n").map(s =>
+            s.replace(/ {2,}/g, " ").trim().replace(NBSP_RE, " ")
+          );
+          lines.push(...sub.map((s, i) => s ? " ".repeat(i === 0 ? firstIndent : restIndent) + s : s));
         }
-        let text;
-        if (b.nodeName === "TR"){
-          text = [...b.cells].map(c => extractInlineText(c).replace(NBSP_RE, " ").trim()).join("\t");
-        } else {
-          text = extractInlineText(b);
-        }
-        const ml = cssLenToInches(b.style && b.style.marginLeft);
-        const ti = cssLenToInches(b.style && b.style.textIndent);
-        const firstIndent = Math.max(0, Math.round((ml + ti) * SPACES_PER_INCH));
-        const restIndent = Math.max(0, Math.round(ml * SPACES_PER_INCH));
-        const sub = text.split("\n").map(s =>
-          s.replace(/ {2,}/g, " ").trim().replace(NBSP_RE, " ")
-        );
-        lines.push(...sub.map((s, i) => s ? " ".repeat(i === 0 ? firstIndent : restIndent) + s : s));
+        return lines.join("\n").replace(/[ \t]+$/gm, "");
+      }catch(e){
+        return "";
+      }finally{
+        iframe.remove();
       }
-      return lines.join("\n").replace(/[ \t]+$/gm, "");
     }
 
     async function readClipboardText(){
