@@ -1130,15 +1130,109 @@ function tokenize(text, mode){
       input.click();
     }
 
+    // ---------------------------
+    // Paste handling
+    // Word's plain-text clipboard flavor drops paragraph indentation (it's
+    // formatting, not characters). Read the HTML flavor when available and
+    // convert margin-left/text-indent into leading spaces.
+    // ---------------------------
+    const SPACES_PER_INCH = 16; // one Word tab stop (0.5") -> 8 spaces
+
+    function cssLenToInches(v){
+      if (!v) return 0;
+      const m = String(v).trim().match(/^(-?(?:\d+\.?\d*|\.\d+))(in|pt|px|cm|mm|pc|em)?$/i);
+      if (!m) return 0;
+      const per = { in:1, pt:1/72, px:1/96, cm:1/2.54, mm:1/25.4, pc:1/6, em:12/72 };
+      return parseFloat(m[1]) * (per[(m[2] || "in").toLowerCase()] ?? 1);
+    }
+
+    const NBSP_RE = new RegExp(String.fromCharCode(160), "g"); // non-breaking space
+
+    function extractInlineText(node){
+      // textContent, but with <br> as newline and HTML-source line wraps collapsed
+      let out = "";
+      for (const ch of node.childNodes){
+        if (ch.nodeType === Node.TEXT_NODE) out += ch.nodeValue.replace(/[\r\n\t]+/g, " ");
+        else if (ch.nodeType !== Node.ELEMENT_NODE) continue;
+        else if (ch.nodeName === "BR") out += "\n";
+        else out += extractInlineText(ch);
+      }
+      return out;
+    }
+
+    function htmlClipboardToText(html){
+      let doc;
+      try{ doc = new DOMParser().parseFromString(html, "text/html"); }
+      catch(e){ return ""; }
+      if (!doc || !doc.body) return "";
+      try{
+        doc.body.querySelectorAll("style,script,link,meta,title,xml,o\\:p").forEach(el => el.remove());
+      }catch(e){ /* exotic selectors can throw; content removal is best-effort */ }
+
+      let blocks = [...doc.body.querySelectorAll("p,li,h1,h2,h3,h4,h5,h6,pre,tr")];
+      blocks = blocks.filter(b => !blocks.some(o => o !== b && o.contains(b)));
+      if (!blocks.length) blocks = [doc.body];
+
+      const lines = [];
+      for (const b of blocks){
+        if (b.nodeName === "PRE"){
+          lines.push(...b.textContent.replace(/\r/g, "").split("\n"));
+          continue;
+        }
+        let text;
+        if (b.nodeName === "TR"){
+          text = [...b.cells].map(c => extractInlineText(c).replace(NBSP_RE, " ").trim()).join("\t");
+        } else {
+          text = extractInlineText(b);
+        }
+        const ml = cssLenToInches(b.style && b.style.marginLeft);
+        const ti = cssLenToInches(b.style && b.style.textIndent);
+        const firstIndent = Math.max(0, Math.round((ml + ti) * SPACES_PER_INCH));
+        const restIndent = Math.max(0, Math.round(ml * SPACES_PER_INCH));
+        const sub = text.split("\n").map(s =>
+          s.replace(/ {2,}/g, " ").trim().replace(NBSP_RE, " ")
+        );
+        lines.push(...sub.map((s, i) => s ? " ".repeat(i === 0 ? firstIndent : restIndent) + s : s));
+      }
+      return lines.join("\n").replace(/[ \t]+$/gm, "");
+    }
+
+    async function readClipboardText(){
+      try{
+        if (navigator.clipboard && navigator.clipboard.read){
+          const items = await navigator.clipboard.read();
+          for (const item of items){
+            if (item.types.includes("text/html")){
+              const html = await (await item.getType("text/html")).text();
+              const converted = htmlClipboardToText(html);
+              if (converted.trim()) return converted;
+            }
+          }
+        }
+      }catch(e){ /* fall back to plain text */ }
+      return await navigator.clipboard.readText();
+    }
+
     async function pasteInto(textarea){
       try{
-        const t = await navigator.clipboard.readText();
-        textarea.value = t;
+        textarea.value = await readClipboardText();
         refresh();
         setStatus("Pasted from clipboard.");
       }catch(e){
         setStatus("Clipboard paste blocked by browser permissions.", true);
       }
+    }
+
+    function handlePasteEvent(e){
+      const html = e.clipboardData && e.clipboardData.getData("text/html");
+      if (!html) return; // plain-text paste: default behavior
+      const converted = htmlClipboardToText(html);
+      if (!converted.trim()) return;
+      e.preventDefault();
+      const ta = e.target;
+      ta.setRangeText(converted, ta.selectionStart, ta.selectionEnd, "end");
+      updateCounts();
+      debouncedRefresh();
     }
 
     // ---------------------------
@@ -1166,6 +1260,9 @@ function tokenize(text, mode){
 
       $("#origPaste").addEventListener("click", () => pasteInto($("#origText")));
       $("#modPaste").addEventListener("click", () => pasteInto($("#modText")));
+
+      $("#origText").addEventListener("paste", handlePasteEvent);
+      $("#modText").addEventListener("paste", handlePasteEvent);
 
       $("#origClear").addEventListener("click", () => { $("#origText").value = ""; refresh(); });
       $("#modClear").addEventListener("click", () => { $("#modText").value = ""; refresh(); });
