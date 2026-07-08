@@ -587,6 +587,135 @@ function tokenize(text, mode){
     }
 
 
+    // ---------------------------
+    // Layout-preserving diff (used when "Ignore whitespace" is on)
+    // Aligns on content tokens only (words/punctuation); the original text's
+    // whitespace — indentation, line breaks, paragraph structure — is re-emitted
+    // around the diff so the output keeps the original's formatting.
+    // ---------------------------
+    function diffOpsIndexed(aTokens, bTokens, normalizer){
+      // Same LCS as diffLCS, but returns per-token ops with source indices, unmerged.
+      const eq = normalizer
+        ? (a, b) => normalizer(a) === normalizer(b)
+        : (a, b) => a === b;
+      const n = aTokens.length, m = bTokens.length;
+
+      const dp = Array(n+1);
+      for (let i=0;i<=n;i++) dp[i] = new Uint32Array(m+1);
+      for (let i=n-1;i>=0;i--){
+        const row = dp[i];
+        const rowNext = dp[i+1];
+        for (let j=m-1;j>=0;j--){
+          if (eq(aTokens[i], bTokens[j])) row[j] = rowNext[j+1] + 1;
+          else row[j] = Math.max(rowNext[j], row[j+1]);
+        }
+      }
+
+      const ops = [];
+      let i=0, j=0;
+      while (i<n && j<m){
+        if (eq(aTokens[i], bTokens[j])){ ops.push({ op:"eq", ai:i, bi:j }); i++; j++; }
+        else if (dp[i+1][j] >= dp[i][j+1]){ ops.push({ op:"del", ai:i }); i++; }
+        else { ops.push({ op:"ins", bi:j }); j++; }
+      }
+      while (i<n){ ops.push({ op:"del", ai:i }); i++; }
+      while (j<m){ ops.push({ op:"ins", bi:j }); j++; }
+      return ops;
+    }
+
+    function isWsToken(tok){ return /^\s+$/.test(tok); }
+
+    function refineWordPairs(parts, normalizer){
+      // Char-level diff inside adjacent removed/added word pairs (typo fixes).
+      const out = [];
+      for (let i=0;i<parts.length;i++){
+        const p = parts[i];
+        const next = parts[i+1];
+        if (p && next && ((p.removed && next.added) || (p.added && next.removed))){
+          const delP = p.removed ? p : next;
+          const insP = p.removed ? next : p;
+          const m = insP.value.match(/^(\s*)([\s\S]*)$/);
+          const insWs = m[1], insWord = m[2];
+          if (isWordToken(delP.value) && isWordToken(insWord)){
+            if (insWs) out.push({ value: insWs, added: true });
+            out.push(...diffLCS(tokenizeChar(delP.value), tokenizeChar(insWord), normalizer));
+            i++; // consume next
+            continue;
+          }
+        }
+        out.push(p);
+      }
+      return out;
+    }
+
+    function computePreserveLayoutDiff(a, b, normalizer, charRefine){
+      const aT = tokenizeWordTight(a);
+      const bT = tokenizeWordTight(b);
+      const aIdx = [], bIdx = [];
+      for (let i=0;i<aT.length;i++) if (!isWsToken(aT[i])) aIdx.push(i);
+      for (let i=0;i<bT.length;i++) if (!isWsToken(bT[i])) bIdx.push(i);
+
+      const ops = diffOpsIndexed(aIdx.map(i=>aT[i]), bIdx.map(i=>bT[i]), normalizer);
+
+      // Pass 1: one part per token; original whitespace rides along as unchanged text.
+      const parts = [];
+      let aPos = 0;
+      const emitAWs = (limit) => {
+        while (aPos < limit){ parts.push({ value: aT[aPos], ws: true }); aPos++; }
+      };
+      for (const op of ops){
+        if (op.op === "ins"){
+          parts.push({ value: bT[bIdx[op.bi]], added: true, bi: bIdx[op.bi] });
+        } else {
+          const ai = aIdx[op.ai];
+          emitAWs(ai);
+          parts.push(op.op === "del" ? { value: aT[ai], removed: true } : { value: aT[ai] });
+          aPos = ai + 1;
+        }
+      }
+      emitAWs(aT.length);
+
+      // Pass 2: fold whitespace into deletion runs so accepting changes doesn't
+      // leave doubled spaces. Newline whitespace is only swallowed when the run
+      // removes a whole line/paragraph (no plain space available on either side).
+      for (let i=0;i<parts.length;i++){
+        if (!parts[i].removed) continue;
+        let j = i;
+        while (j+1 < parts.length){
+          if (parts[j+1].removed){ j++; continue; }
+          if (parts[j+1].ws && j+2 < parts.length && parts[j+2].removed){
+            parts[j+1].removed = true; j += 2; continue;
+          }
+          break;
+        }
+        // Replacement (deletion directly followed by insertion): the new text
+        // slots into the original spacing, so don't swallow any whitespace.
+        if (j+1 < parts.length && parts[j+1].added){ i = j; continue; }
+        const lead = (i>0 && parts[i-1].ws && !parts[i-1].removed) ? parts[i-1] : null;
+        const trail = (j+1 < parts.length && parts[j+1].ws) ? parts[j+1] : null;
+        if (lead && !lead.value.includes("\n")) lead.removed = true;
+        else if (trail && !trail.value.includes("\n")) trail.removed = true;
+        else if (trail) trail.removed = true;
+        else if (lead) lead.removed = true;
+        i = j;
+      }
+
+      // Pass 3: give insertions their spacing from the modified text, but only
+      // when the preceding visible text doesn't already end in whitespace.
+      for (let k=0;k<parts.length;k++){
+        const p = parts[k];
+        if (!p.added || p.bi === undefined) continue;
+        const wsBefore = (p.bi > 0 && isWsToken(bT[p.bi-1])) ? bT[p.bi-1] : "";
+        if (!wsBefore) continue;
+        let lastVisible = null;
+        for (let q=k-1;q>=0;q--){ if (!parts[q].removed){ lastVisible = parts[q]; break; } }
+        if (!lastVisible || !/\s$/.test(lastVisible.value)) p.value = wsBefore + p.value;
+      }
+
+      const refined = charRefine ? refineWordPairs(parts, normalizer) : parts;
+      return mergeParts(refined);
+    }
+
     function computeDiff(){
       const mode = document.querySelector('input[name="mode"]:checked').value;
       const ignoreCase = $("#ignoreCase").checked;
@@ -594,6 +723,10 @@ function tokenize(text, mode){
       const normalizer = (ignoreCase || ignoreWhitespace) ? makeNormalizer(ignoreCase, ignoreWhitespace) : null;
       const a = $("#origText").value || "";
       const b = $("#modText").value || "";
+      if (ignoreWhitespace && (mode === "word" || mode === "char")){
+        // Align on content only; keep the original text's indentation/line breaks.
+        return computePreserveLayoutDiff(a, b, normalizer, mode === "char");
+      }
       if (mode === "char"){
         return computeCharHybrid(a, b, normalizer);
       }
