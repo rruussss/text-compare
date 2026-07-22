@@ -867,14 +867,15 @@ function tokenize(text, mode){
     }
 
     function buildCopyHtmlHard(parts){
-      // Hard formatting via <u> and <strike>, no semantics
+      // Hard formatting via spans with explicit text-decoration (Word's HTML
+      // importer doesn't reliably map deprecated <strike>, and drops rgba backgrounds).
       let html = `<div style="white-space:pre-wrap;font-family:Calibri,Arial,sans-serif;font-size:11pt;">`;
       for (const p of parts){
         const t = escapeXml(p.value).replaceAll("\n","<br>");
         if (p.added){
-          html += `<u style="background:rgba(69,255,158,0.22);">${t}</u>`;
+          html += `<span style="text-decoration:underline;background:#c6efce;">${t}</span>`;
         } else if (p.removed){
-          html += `<strike style="background:rgba(255,90,90,0.22);">${t}</strike>`;
+          html += `<span style="text-decoration:line-through;background:#ffc7ce;">${t}</span>`;
         } else {
           html += `<span>${t}</span>`;
         }
