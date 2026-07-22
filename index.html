@@ -820,7 +820,23 @@ function tokenize(text, mode){
     // ---------------------------
     // Clipboard copy helpers
     // ---------------------------
-    function copyHtmlToClipboard(html){
+    async function copyHtmlToClipboard(html){
+      // Preferred: modern async Clipboard API writes our raw HTML verbatim,
+      // avoiding the browser re-serializing/sanitizing a hidden selection
+      // (which can strip strikethrough styling before it ever reaches Word).
+      try{
+        if (navigator.clipboard && window.ClipboardItem){
+          const plain = html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "");
+          const item = new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" })
+          });
+          await navigator.clipboard.write([item]);
+          return true;
+        }
+      }catch(e){ /* fall through to legacy path */ }
+
+      // Legacy fallback: hidden contenteditable + execCommand
       const tmp = document.createElement("div");
       tmp.contentEditable = "true";
       tmp.style.position = "fixed";
@@ -867,15 +883,16 @@ function tokenize(text, mode){
     }
 
     function buildCopyHtmlHard(parts){
-      // Hard formatting via spans with explicit text-decoration (Word's HTML
-      // importer doesn't reliably map deprecated <strike>, and drops rgba backgrounds).
+      // Hard formatting: use <u>/<s> ELEMENTS (Word's paste importer maps by
+      // element, and <u> is proven to survive) plus explicit inline styles as
+      // backup for CSS-based importers. Solid hex backgrounds — rgba gets dropped.
       let html = `<div style="white-space:pre-wrap;font-family:Calibri,Arial,sans-serif;font-size:11pt;">`;
       for (const p of parts){
         const t = escapeXml(p.value).replaceAll("\n","<br>");
         if (p.added){
-          html += `<span style="text-decoration:underline;background:#c6efce;">${t}</span>`;
+          html += `<u style="text-decoration:underline;background:#c6efce;">${t}</u>`;
         } else if (p.removed){
-          html += `<span style="text-decoration:line-through;background:#ffc7ce;">${t}</span>`;
+          html += `<s style="text-decoration:line-through;background:#ffc7ce;">${t}</s>`;
         } else {
           html += `<span>${t}</span>`;
         }
@@ -1303,16 +1320,16 @@ function tokenize(text, mode){
       $("#origClear").addEventListener("click", () => { $("#origText").value = ""; refresh(); });
       $("#modClear").addEventListener("click", () => { $("#modText").value = ""; refresh(); });
 
-      $("#copyTracked").addEventListener("click", () => {
+      $("#copyTracked").addEventListener("click", async () => {
         const html = buildCopyHtmlTracked(lastParts);
-        const ok = copyHtmlToClipboard(html);
+        const ok = await copyHtmlToClipboard(html);
         if (ok) showCopyFeedback("✓ Copied (tracked changes).", "Ready." + lastSummary);
         else setStatus("Copy failed. Browser said no.", true);
       });
 
-      $("#copyHard").addEventListener("click", () => {
+      $("#copyHard").addEventListener("click", async () => {
         const html = buildCopyHtmlHard(lastParts);
-        const ok = copyHtmlToClipboard(html);
+        const ok = await copyHtmlToClipboard(html);
         if (ok) showCopyFeedback("✓ Copied (hard formatting).", "Ready." + lastSummary);
         else setStatus("Copy failed. Browser said no.", true);
       });
@@ -1324,7 +1341,7 @@ function tokenize(text, mode){
         else setStatus("Copy failed. Browser said no.", true);
       });
 
-      document.addEventListener("keydown", (e) => {
+      document.addEventListener("keydown", async (e) => {
         if (e.key === "F5" || (e.ctrlKey && e.key === "Enter")){
           e.preventDefault();
           refresh();
@@ -1333,7 +1350,7 @@ function tokenize(text, mode){
         if (e.ctrlKey && e.shiftKey && e.key === "C"){
           e.preventDefault();
           const html = buildCopyHtmlTracked(lastParts);
-          const ok = copyHtmlToClipboard(html);
+          const ok = await copyHtmlToClipboard(html);
           if (ok) showCopyFeedback("✓ Copied (tracked changes).", "Ready." + lastSummary);
           else setStatus("Copy failed. Browser said no.", true);
         }
