@@ -1,107 +1,4 @@
 
-update at github
-
-
-Searching connectors
-Searching connectors
-I don't have a GitHub connector available, so I can't push directly to your repo. But here's the updated file ready to commit:
-
-
-Ran 3 commands, viewed a file, edited a file
-Ran 3 commands, viewed a file, edited a file
-Fixed index.html is ready above. Only change is the buildCopyHtmlHard function — deletions now use <span style="text-decoration:line-through"> with solid hex backgrounds (
-#ffc7ce red / 
-#c6efce green) instead of <strike> with rgba.
-
-To update the repo from your phone or browser:
-
-Go to github.com/rruussss/text-compare → tap index.html → pencil icon (Edit)
-Select all, paste in the new file contents (or download the file above and drag it into the repo via "Add file → Upload files", which replaces it)
-Commit — GitHub Pages redeploys automatically in ~a minute
-If you have a GitHub connector you'd like me to use in the future, you can add one via Settings → Connectors, and then I can push changes like this directly.
-
-
-Index
-Code · HTML 
-still not working - none of the strikethroughs are coming through
-
-
-Diagnosed formatting loss and pivoted toward semantic HTML elements
-Diagnosed formatting loss and pivoted toward semantic HTML elements
-Two likely culprits left: your paste target is mapping HTML elements (not CSS) to formatting — <u> worked, so element-based <s> should too — and the old-school execCommand("copy") selection trick can mangle clipboard HTML. Let me fix both: use <s>/<u> elements with explicit inline styles (belt and suspenders), and write to the clipboard via the modern ClipboardItem API with the old method as fallback.
-
-
-Reconciling divergent file versions and recent modifications
-Reconciling divergent file versions and recent modifications
-Now make the three call sites await the async copy:
-
-
-Edited 3 files, ran a command, read a file
-Edited 3 files, ran a command, read a file
-This version attacks the problem from both ends:
-
-Clipboard write method — the old code selected a hidden div and ran execCommand("copy"), which lets the browser re-serialize/sanitize the HTML before it hits the clipboard — a known way to lose strikethrough styling. Now it writes your exact HTML via navigator.clipboard.write() with ClipboardItem (execCommand kept as fallback for older browsers).
-Markup — deletions now use the <s> element (HTML5-valid, and Word maps elements like it maps your working <u>) plus explicit text-decoration:line-through inline, so it works whether the paste target reads elements or CSS.
-Note: I patched this against the current live version of your site (it has the debounce/diff-summary code that wasn't in what you pasted earlier), so this file is safe to drop in wholesale.
-
-One diagnostic worth 30 seconds if this still misbehaves: paste into a different target (e.g., Gmail compose or Outlook) and see if strikethrough appears there. If it does, the clipboard content is fine and the issue is Word's paste settings — check File → Options → Advanced → "Pasting from other programs" is set to "Keep Source Formatting."
-
-
-Index
-Code · HTML 
-still not working.  btw, i'm pasting into an outlook email
-
-
-Diagnosing HTML sanitization differences across Outlook platforms
-Diagnosing HTML sanitization differences across Outlook platforms
-Let me check what Outlook does with pasted strikethrough — this smells like an Outlook-specific sanitization issue.
-
-
-Identified Outlook formatting bug, devised Unicode workaround solution
-Identified Outlook formatting bug, devised Unicode workaround solution
-Deleted text will now render like d̶i̶s̶c̶u̶s̶s̶ — the strike is baked into the characters, so Outlook can't strip it.
-
-Trade-offs to know:
-
-If a recipient copies text out of your email, the combining marks come with it (they'd need to retype rather than copy the deleted words — usually fine since they're deletions anyway)
-Screen readers handle it poorly
-"Copy Tracked Changes" is unchanged, so pasting into Word for real redlining still works cleanly
-Quick verify after you deploy: click Copy Hard, paste into the Outlook draft — deletions should show struck through now regardless of what the sanitizer does.
-
-If you'd rather not have Unicode in the deletions, the alternative is pasting into classic Outlook desktop (Word-engine editor, which honors the <s> tag) — the stripping is specific to new Outlook / Outlook Web's editor.
-
-
-Index
-Code · HTML 
-1784752111400_image.png
-this doesn't look right...
-
-
-Diagnosed formatting issues and devised patent-style markup solution
-Diagnosed formatting issues and devised patent-style markup solution
-Yeah — that's the Unicode combining marks rendering badly. In Calibri the per-character strokes don't connect (choppy line), and Outlook's spellchecker red-squiggles the "misspelled" gibberish. It survives the sanitizer, but it's ugly.
-
-Better idea, and one you already live in: mark deletions with double brackets, USPTO § 1.121 amendment style — insertions underlined, deletions as [[discuss]]. Plain characters, so no sanitizer or font can mangle it, and any patent audience reads it instantly. I'll keep the <s> strikethrough styling on top, so in editors that honor it you get strike and brackets:
-
-
-Edited a file, ran a command, read a file
-Edited a file, ran a command, read a file
-So your example will now paste as: [[discuss]]<u>recite</u> — brackets guaranteed everywhere, strikethrough as a bonus where the editor allows it. Also fixes the readability problem from your first screenshot, where "discussrecite" jammed together into one word.
-
-If you'd rather the brackets only appear as a fallback (i.e., clean strikethrough in Word, brackets only in Outlook), that's not possible from the clipboard side — the HTML is fixed at copy time and we can't detect the paste target. Two-button approach ("Copy Hard" / "Copy Hard for Email") would be the way if the brackets bother you in Word.
-
-
-Index
-Code · HTML 
-
-
-
-
-
-Claude is AI and can make mistakes. Please double-check responses.
-
-
-Index · HTML
 <!doctype html>
 <html lang="en">
 <head>
@@ -303,7 +200,7 @@ Index · HTML
     </div>
     <div class="sub" id="zipStatus">JSZip: loading… · <span style="opacity:0.85;">F5 or Ctrl+Enter refresh · Ctrl+Shift+C copy tracked</span></div>
   </header>
- 
+
   <div class="wrap">
     <div class="main">
       <div class="left">
@@ -321,7 +218,7 @@ Index · HTML
             <div class="count"><span id="origCount">0</span> characters · <span id="origWords">0</span> words</div>
           </div>
         </div>
- 
+
         <div class="panel" id="modPanel">
           <div class="panelHeader">
             <div class="title">Modified Text</div>
@@ -340,7 +237,7 @@ Index · HTML
           <button id="swapTexts" type="button">↔ Swap Original ↔ Modified</button>
         </div>
       </div>
- 
+
       <div class="right">
         <div class="rightHeader">
           <div class="title">Diff Preview</div>
@@ -353,7 +250,7 @@ Index · HTML
         <div class="preview" id="preview" aria-label="Diff preview"></div>
       </div>
     </div>
- 
+
     <div class="controls">
       <div class="leftCtl">
         <label for="author">Author:</label>
@@ -374,10 +271,10 @@ Index · HTML
       </div>
     </div>
   </div>
- 
+
   <!-- Only external dependency allowed -->
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
- 
+
   <script>
     // ---------------------------
     // Utilities
@@ -385,7 +282,7 @@ Index · HTML
     const $ = (sel) => document.querySelector(sel);
     const statusEl = $("#status");
     const zipStatusEl = $("#zipStatus");
- 
+
     let statusSuccessTimer = null;
     function setStatus(msg, isError=false, isSuccess=false){
       if (statusSuccessTimer) clearTimeout(statusSuccessTimer);
@@ -405,7 +302,7 @@ Index · HTML
         statusSuccessTimer = null;
       }, 1800);
     }
- 
+
     function pad2(n){ return String(n).padStart(2,"0"); }
     function isoNow(){
       // Word accepts ISO 8601; use local time with Z offset-ish? Keep it simple: UTC Z.
@@ -421,7 +318,7 @@ Index · HTML
       const ss = pad2(d.getSeconds());
       return `tracked_changes_${y}${mo}${da}_${hh}${mm}${ss}.docx`;
     }
- 
+
     function escapeXml(s){
       return s
         .replaceAll("&","&amp;")
@@ -430,12 +327,12 @@ Index · HTML
         .replaceAll('"',"&quot;")
         .replaceAll("'","&apos;");
     }
- 
+
     function needsPreserveSpace(s){
       // If string has leading/trailing space or consecutive spaces, preserve.
       return /^\s|\s$|  |\t/.test(s);
     }
- 
+
     // ---------------------------
     // Tokenizers (keep '\n' as a token so we can create paragraphs)
     // ---------------------------
@@ -449,7 +346,7 @@ Index · HTML
       }
       return out;
     }
- 
+
     function tokenizeLine(text){
       // split into lines but keep newline tokens
       const norm = text.replaceAll("\r","");
@@ -461,7 +358,7 @@ Index · HTML
       }
       return out;
     }
- 
+
         function tokenizeWord(text){
           // Word-ish tokens, but attach spaces/tabs to the *previous* token (except across newlines).
           // This keeps phrase-level changes from exploding into one <ins>/<del> per word.
@@ -504,13 +401,13 @@ Index · HTML
     
           return out;
         }
- 
+
 function tokenize(text, mode){
       if (mode === "line") return tokenizeLine(text);
       if (mode === "word") return tokenizeWord(text);
       return tokenizeChar(text);
     }
- 
+
     // ---------------------------
     // Comparison normalizer (for ignore case / ignore whitespace)
     // ---------------------------
@@ -522,7 +419,7 @@ function tokenize(text, mode){
         return s;
       };
     }
- 
+
     // ---------------------------
     // LCS-based diff (inline, no external diff libs)
     // Returns array of { value, added?, removed? }
@@ -533,13 +430,13 @@ function tokenize(text, mode){
         ? (a, b) => normalizer(a) === normalizer(b)
         : (a, b) => a === b;
       const n = aTokens.length, m = bTokens.length;
- 
+
       // DP for LCS length, using Uint16/Uint32-ish arrays
       // dp[i][j] = LCS length for a[i:] and b[j:]
       // We'll build bottom-up row by row.
       const dp = Array(n+1);
       for (let i=0;i<=n;i++) dp[i] = new Uint32Array(m+1);
- 
+
       for (let i=n-1;i>=0;i--){
         const row = dp[i];
         const rowNext = dp[i+1];
@@ -548,7 +445,7 @@ function tokenize(text, mode){
           else row[j] = Math.max(rowNext[j], row[j+1]);
         }
       }
- 
+
       // backtrack
       const out = [];
       let i=0, j=0;
@@ -571,7 +468,7 @@ function tokenize(text, mode){
       }
       while (i<n){ out.push({ value: aTokens[i], removed: true }); i++; }
       while (j<m){ out.push({ value: bTokens[j], added: true }); j++; }
- 
+
       // merge adjacent same-type chunks for cleaner output
       const merged = [];
       for (const part of out){
@@ -581,7 +478,7 @@ function tokenize(text, mode){
           !!prev.added === !!part.added &&
           !!prev.removed === !!part.removed &&
           (prev.added || prev.removed) === (part.added || part.removed);
- 
+
         if (sameKind){
           prev.value += part.value;
         } else {
@@ -590,7 +487,7 @@ function tokenize(text, mode){
       }
       return merged;
     }
- 
+
     function mergeParts(parts){
       // merge adjacent same-kind parts
       const merged = [];
@@ -608,7 +505,7 @@ function tokenize(text, mode){
       }
       return merged;
     }
- 
+
     
     function tokenizeWordTight(text){
       // Word-ish tokenizer that keeps whitespace as its own token (newlines preserved).
@@ -617,12 +514,12 @@ function tokenize(text, mode){
       const out = [];
       let i = 0;
       const isWordChar = (c) => /[A-Za-z0-9_’']/u.test(c);
- 
+
       while (i < norm.length){
         const c = norm[i];
- 
+
         if (c === "\n"){ out.push("\n"); i++; continue; }
- 
+
         // whitespace (excluding \n)
         if (c === " " || c === "\t"){
           let j = i + 1;
@@ -631,7 +528,7 @@ function tokenize(text, mode){
           i = j;
           continue;
         }
- 
+
         // word chunk
         if (isWordChar(c)){
           let j = i + 1;
@@ -640,20 +537,20 @@ function tokenize(text, mode){
           i = j;
           continue;
         }
- 
+
         // punctuation / other single char
         out.push(c);
         i++;
       }
       return out;
     }
- 
+
     function isWordToken(tok){
       // "word" here means no whitespace and composed of word chars only.
       // (We keep punctuation separate, so this is reliable.)
       return tok && !/[\s]/u.test(tok) && /^[A-Za-z0-9_’']+$/u.test(tok);
     }
- 
+
     function computeCharHybrid(a, b, normalizer){
       // Hybrid strategy:
       // 1) Align on tight "word-ish" tokens (whitespace preserved as tokens) to keep edits local.
@@ -661,14 +558,14 @@ function tokenize(text, mode){
       //    not across whole replacement spans (which causes the LCS to match letters across different words).
       const aT = tokenizeWordTight(a);
       const bT = tokenizeWordTight(b);
- 
+
       const parts = diffLCS(aT, bT, normalizer);
- 
+
       const out = [];
       for (let i = 0; i < parts.length; i++){
         const p = parts[i];
         const next = parts[i+1];
- 
+
         // If we see removed+added adjacent and both look like word tokens, do a local char diff.
         if (p && next && p.removed && next.added && isWordToken(p.value) && isWordToken(next.value)){
           const cParts = diffLCS(tokenizeChar(p.value), tokenizeChar(next.value), normalizer);
@@ -683,14 +580,14 @@ function tokenize(text, mode){
           i++; // consume next
           continue;
         }
- 
+
         out.push(p);
       }
- 
+
       return mergeParts(out);
     }
- 
- 
+
+
     // ---------------------------
     // Layout-preserving diff (used when "Ignore whitespace" is on)
     // Aligns on content tokens only (words/punctuation); the original text's
@@ -703,7 +600,7 @@ function tokenize(text, mode){
         ? (a, b) => normalizer(a) === normalizer(b)
         : (a, b) => a === b;
       const n = aTokens.length, m = bTokens.length;
- 
+
       const dp = Array(n+1);
       for (let i=0;i<=n;i++) dp[i] = new Uint32Array(m+1);
       for (let i=n-1;i>=0;i--){
@@ -714,7 +611,7 @@ function tokenize(text, mode){
           else row[j] = Math.max(rowNext[j], row[j+1]);
         }
       }
- 
+
       const ops = [];
       let i=0, j=0;
       while (i<n && j<m){
@@ -726,9 +623,9 @@ function tokenize(text, mode){
       while (j<m){ ops.push({ op:"ins", bi:j }); j++; }
       return ops;
     }
- 
+
     function isWsToken(tok){ return /^\s+$/.test(tok); }
- 
+
     function refineWordPairs(parts, normalizer){
       // Char-level diff inside adjacent removed/added word pairs (typo fixes).
       const out = [];
@@ -751,16 +648,16 @@ function tokenize(text, mode){
       }
       return out;
     }
- 
+
     function computePreserveLayoutDiff(a, b, normalizer, charRefine){
       const aT = tokenizeWordTight(a);
       const bT = tokenizeWordTight(b);
       const aIdx = [], bIdx = [];
       for (let i=0;i<aT.length;i++) if (!isWsToken(aT[i])) aIdx.push(i);
       for (let i=0;i<bT.length;i++) if (!isWsToken(bT[i])) bIdx.push(i);
- 
+
       const ops = diffOpsIndexed(aIdx.map(i=>aT[i]), bIdx.map(i=>bT[i]), normalizer);
- 
+
       // Pass 1: one part per token; original whitespace rides along as unchanged text.
       const parts = [];
       let aPos = 0;
@@ -778,7 +675,7 @@ function tokenize(text, mode){
         }
       }
       emitAWs(aT.length);
- 
+
       // Pass 2: fold whitespace into deletion runs so accepting changes doesn't
       // leave doubled spaces. Newline whitespace is only swallowed when the run
       // removes a whole line/paragraph (no plain space available on either side).
@@ -803,7 +700,7 @@ function tokenize(text, mode){
         else if (lead) lead.removed = true;
         i = j;
       }
- 
+
       // Pass 3: give insertions their spacing from the modified text, but only
       // when the preceding visible text doesn't already end in whitespace.
       for (let k=0;k<parts.length;k++){
@@ -815,11 +712,11 @@ function tokenize(text, mode){
         for (let q=k-1;q>=0;q--){ if (!parts[q].removed){ lastVisible = parts[q]; break; } }
         if (!lastVisible || !/\s$/.test(lastVisible.value)) p.value = wsBefore + p.value;
       }
- 
+
       const refined = charRefine ? refineWordPairs(parts, normalizer) : parts;
       return mergeParts(refined);
     }
- 
+
     function computeDiff(){
       const mode = document.querySelector('input[name="mode"]:checked').value;
       const ignoreCase = $("#ignoreCase").checked;
@@ -838,7 +735,7 @@ function tokenize(text, mode){
       const bTok = tokenize(b, mode);
       return diffLCS(aTok, bTok, normalizer);
     }
- 
+
     // ---------------------------
     // Preview rendering (preserve whitespace/line breaks)
     // ---------------------------
@@ -848,7 +745,7 @@ function tokenize(text, mode){
       const orig = ($("#origText").value || "").trim();
       const mod = ($("#modText").value || "").trim();
       const isEmpty = !orig && !mod;
- 
+
       if (isEmpty || (parts.length === 1 && !parts[0].added && !parts[0].removed && (orig === mod))){
         preview.innerHTML = "";
         const hint = document.createElement("p");
@@ -859,7 +756,7 @@ function tokenize(text, mode){
         return;
       }
       preview.classList.remove("emptyState");
- 
+
       const frag = document.createDocumentFragment();
       for (const p of parts){
         if (p.added){
@@ -880,7 +777,7 @@ function tokenize(text, mode){
       preview.innerHTML = "";
       preview.appendChild(frag);
     }
- 
+
     function wordCount(text){
       const t = (text || "").trim();
       return t ? t.split(/\s+/).length : 0;
@@ -893,7 +790,7 @@ function tokenize(text, mode){
       $("#origWords").textContent = wordCount(orig);
       $("#modWords").textContent = wordCount(mod);
     }
- 
+
     let lastParts = [];
     let lastSummary = "";
     function getDiffSummary(parts){
@@ -913,14 +810,14 @@ function tokenize(text, mode){
       if (!statusEl.classList.contains("copyFeedback"))
         setStatus("Ready." + lastSummary);
     }
- 
+
     let refreshDebounceTimer = null;
     const DEBOUNCE_MS = 200;
     function debouncedRefresh(){
       if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
       refreshDebounceTimer = setTimeout(() => { refreshDebounceTimer = null; refresh(); }, DEBOUNCE_MS);
     }
- 
+
     // ---------------------------
     // Clipboard copy helpers
     // ---------------------------
@@ -939,7 +836,7 @@ function tokenize(text, mode){
           return true;
         }
       }catch(e){ /* fall through to legacy path */ }
- 
+
       // Legacy fallback: hidden contenteditable + execCommand
       const tmp = document.createElement("div");
       tmp.contentEditable = "true";
@@ -949,13 +846,13 @@ function tokenize(text, mode){
       tmp.style.opacity = "0";
       tmp.innerHTML = html;
       document.body.appendChild(tmp);
- 
+
       const range = document.createRange();
       range.selectNodeContents(tmp);
       const sel = window.getSelection();
       sel.removeAllRanges();
       sel.addRange(range);
- 
+
       let ok = false;
       try{
         ok = document.execCommand("copy");
@@ -966,7 +863,7 @@ function tokenize(text, mode){
       document.body.removeChild(tmp);
       return ok;
     }
- 
+
     function buildCopyHtmlTracked(parts){
       // <ins>/<del> tags, minimal inline styles so Word tends to keep formatting on paste
       // Note: This is NOT true tracked changes metadata. It's just visual markup.
@@ -985,7 +882,7 @@ function tokenize(text, mode){
       html += `</div>`;
       return html;
     }
- 
+
     function bracketDeleted(text){
       // Wrap deleted text in USPTO §1.121-style double brackets: [[deleted]].
       // Plain characters — survives any paste sanitizer (new Outlook / OWA
@@ -995,7 +892,7 @@ function tokenize(text, mode){
         .map(seg => seg ? `[[${seg}]]` : seg)
         .join("\n");
     }
- 
+
     function buildCopyHtmlHard(parts){
       // Hard formatting: insertions underlined, deletions double-bracketed
       // (plus <s> strikethrough styling for editors that honor it).
@@ -1015,8 +912,8 @@ function tokenize(text, mode){
       html += `</div>`;
       return html;
     }
- 
- 
+
+
     function buildCleanText(parts){
       // "Accept all changes": keep added + unchanged, drop removed.
       // Preserve whitespace and line breaks exactly as represented in the diff parts.
@@ -1027,7 +924,7 @@ function tokenize(text, mode){
       }
       return out;
     }
- 
+
     async function copyTextToClipboard(text){
       // Prefer modern clipboard API; fall back to execCommand for older browsers / file:// quirks.
       try{
@@ -1036,7 +933,7 @@ function tokenize(text, mode){
           return true;
         }
       }catch(e){ /* fall through */ }
- 
+
       const ta = document.createElement("textarea");
       ta.value = text;
       ta.setAttribute("readonly", "");
@@ -1054,7 +951,7 @@ function tokenize(text, mode){
       document.body.removeChild(ta);
       return ok;
     }
- 
+
     // ---------------------------
     // DOCX generation with OOXML tracked changes
     // ---------------------------
@@ -1071,7 +968,7 @@ function tokenize(text, mode){
         return `<w:${tag}${xmlSpace}>${escapeXml(ch)}</w:${tag}>`;
       }).join("");
     }
- 
+
     function partsToDocumentXml(parts, author){
       // Build paragraphs based on '\n' in the diff stream.
       // Within a paragraph, normal text => <w:r><w:t>...</w:t></w:r>
@@ -1079,7 +976,7 @@ function tokenize(text, mode){
       // Deletions => <w:del ...><w:r><w:delText>...</w:delText></w:r></w:del>
       const date = isoNow();
       let changeId = 1;
- 
+
       function wrapNormal(text){
         if (text === "") return "";
         return `<w:r>${buildRunsForValue("t", text)}</w:r>`;
@@ -1094,10 +991,10 @@ function tokenize(text, mode){
         const id = changeId++;
         return `<w:del w:id="${id}" w:author="${escapeXml(author)}" w:date="${date}"><w:r>${buildRunsForValue("delText", text)}</w:r></w:del>`;
       }
- 
+
       const paragraphs = [];
       let currentRuns = "";
- 
+
       function flushPara(){
         // Always create at least an empty paragraph if nothing in it
         paragraphs.push(
@@ -1105,7 +1002,7 @@ function tokenize(text, mode){
         );
         currentRuns = "";
       }
- 
+
       function emitText(kind, txt){
         // split by '\n' to paragraphs
         const segments = txt.split("\n");
@@ -1121,7 +1018,7 @@ function tokenize(text, mode){
           }
         }
       }
- 
+
       // We normalized CR away in tokenizers, but keep safe
       for (const p of parts){
         const v = (p.value || "").replaceAll("\r","");
@@ -1130,9 +1027,9 @@ function tokenize(text, mode){
         else emitText("eq", v);
       }
       flushPara();
- 
+
       const body = paragraphs.join("");
- 
+
       // Minimal WordprocessingML doc with required namespaces
       return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
@@ -1162,7 +1059,7 @@ function tokenize(text, mode){
   </w:body>
 </w:document>`;
     }
- 
+
     function settingsXml(){
       // track revisions enabled
       return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1175,7 +1072,7 @@ function tokenize(text, mode){
   <w:compat/>
 </w:settings>`;
     }
- 
+
     function stylesXml(){
       // Minimal default styles so Word doesn't get weird
       return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1190,7 +1087,7 @@ function tokenize(text, mode){
   </w:style>
 </w:styles>`;
     }
- 
+
     function contentTypesXml(){
       return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -1201,7 +1098,7 @@ function tokenize(text, mode){
   <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
 </Types>`;
     }
- 
+
     function relsXml(){
       // package rels
       return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1209,7 +1106,7 @@ function tokenize(text, mode){
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`;
     }
- 
+
     function docRelsXml(){
       // document rels
       return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1218,23 +1115,23 @@ function tokenize(text, mode){
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
 </Relationships>`;
     }
- 
+
     async function generateDocx(parts){
       if (!window.JSZip) throw new Error("JSZip is not available.");
       const author = ($("#author").value || "TextComparer").trim() || "TextComparer";
       const zip = new JSZip();
- 
+
       zip.file("[Content_Types].xml", contentTypesXml());
       zip.folder("_rels").file(".rels", relsXml());
- 
+
       const word = zip.folder("word");
       word.file("document.xml", partsToDocumentXml(parts, author));
       word.file("styles.xml", stylesXml());
       word.file("settings.xml", settingsXml());
       word.folder("_rels").file("document.xml.rels", docRelsXml());
- 
+
       const blob = await zip.generateAsync({ type: "blob" });
- 
+
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = tsFilename();
@@ -1245,7 +1142,7 @@ function tokenize(text, mode){
         a.remove();
       }, 1500);
     }
- 
+
     // ---------------------------
     // File operations
     // ---------------------------
@@ -1262,7 +1159,7 @@ function tokenize(text, mode){
       });
       input.click();
     }
- 
+
     // ---------------------------
     // Paste handling
     // Word's plain-text clipboard flavor drops paragraph indentation (it's
@@ -1270,9 +1167,9 @@ function tokenize(text, mode){
     // convert margin-left/text-indent into leading spaces.
     // ---------------------------
     const SPACES_PER_INCH = 16; // one Word tab stop (0.5") -> 8 spaces
- 
+
     const NBSP_RE = new RegExp(String.fromCharCode(160), "g"); // non-breaking space
- 
+
     function sanitizeClipboardHtml(html){
       // Parse inertly, strip anything executable, return markup safe to render.
       let doc;
@@ -1287,7 +1184,7 @@ function tokenize(text, mode){
       }
       return doc.documentElement.outerHTML;
     }
- 
+
     function extractInlineText(node){
       // textContent, but with <br> as newline and HTML-source line wraps collapsed
       let out = "";
@@ -1299,7 +1196,7 @@ function tokenize(text, mode){
       }
       return out;
     }
- 
+
     function htmlClipboardToText(html){
       // Render the clipboard HTML in a hidden iframe and measure each paragraph's
       // actual layout position. This resolves indents no matter where they're
@@ -1307,7 +1204,7 @@ function tokenize(text, mode){
       // inherited/nested structures.
       const safe = sanitizeClipboardHtml(html);
       if (!safe) return "";
- 
+
       const iframe = document.createElement("iframe");
       iframe.setAttribute("aria-hidden", "true");
       iframe.style.cssText = "position:fixed;left:-10000px;top:0;width:816px;height:100px;visibility:hidden;border:0;";
@@ -1320,7 +1217,7 @@ function tokenize(text, mode){
         try{
           body.querySelectorAll("o\\:p").forEach(el => el.remove());
         }catch(e){ /* best-effort */ }
- 
+
         const win = idoc.defaultView;
         const bodyRect = body.getBoundingClientRect();
         const bodyCS = win.getComputedStyle(body);
@@ -1328,11 +1225,11 @@ function tokenize(text, mode){
           + (parseFloat(bodyCS.borderLeftWidth) || 0)
           + (parseFloat(bodyCS.paddingLeft) || 0);
         const pxToSpaces = (px) => Math.max(0, Math.round(px / 96 * SPACES_PER_INCH));
- 
+
         let blocks = [...body.querySelectorAll("p,li,h1,h2,h3,h4,h5,h6,pre,tr")];
         blocks = blocks.filter(b => !blocks.some(o => o !== b && o.contains(b)));
         if (!blocks.length) blocks = [body];
- 
+
         const lines = [];
         for (const b of blocks){
           if (b.nodeName === "PRE"){
@@ -1364,7 +1261,7 @@ function tokenize(text, mode){
         iframe.remove();
       }
     }
- 
+
     async function readClipboardText(){
       try{
         if (navigator.clipboard && navigator.clipboard.read){
@@ -1380,7 +1277,7 @@ function tokenize(text, mode){
       }catch(e){ /* fall back to plain text */ }
       return await navigator.clipboard.readText();
     }
- 
+
     async function pasteInto(textarea){
       try{
         textarea.value = await readClipboardText();
@@ -1390,7 +1287,7 @@ function tokenize(text, mode){
         setStatus("Clipboard paste blocked by browser permissions.", true);
       }
     }
- 
+
     function handlePasteEvent(e){
       const html = e.clipboardData && e.clipboardData.getData("text/html");
       if (!html) return; // plain-text paste: default behavior
@@ -1402,60 +1299,60 @@ function tokenize(text, mode){
       updateCounts();
       debouncedRefresh();
     }
- 
+
     // ---------------------------
     // Wire up UI
     // ---------------------------
     function init(){
       if (window.JSZip) zipStatusEl.textContent = "JSZip: ready";
       else zipStatusEl.textContent = "JSZip: not loaded";
- 
+
       $("#origText").addEventListener("input", () => { updateCounts(); debouncedRefresh(); });
       $("#modText").addEventListener("input", () => { updateCounts(); debouncedRefresh(); });
       document.querySelectorAll('input[name="mode"]').forEach(r => r.addEventListener("change", refresh));
       $("#ignoreCase").addEventListener("change", refresh);
       $("#ignoreWhitespace").addEventListener("change", refresh);
- 
+
       $("#swapTexts").addEventListener("click", () => {
         const o = $("#origText").value;
         $("#origText").value = $("#modText").value;
         $("#modText").value = o;
         refresh();
       });
- 
+
       $("#origLoad").addEventListener("click", () => makeFilePicker((t)=> $("#origText").value = t));
       $("#modLoad").addEventListener("click", () => makeFilePicker((t)=> $("#modText").value = t));
- 
+
       $("#origPaste").addEventListener("click", () => pasteInto($("#origText")));
       $("#modPaste").addEventListener("click", () => pasteInto($("#modText")));
- 
+
       $("#origText").addEventListener("paste", handlePasteEvent);
       $("#modText").addEventListener("paste", handlePasteEvent);
- 
+
       $("#origClear").addEventListener("click", () => { $("#origText").value = ""; refresh(); });
       $("#modClear").addEventListener("click", () => { $("#modText").value = ""; refresh(); });
- 
+
       $("#copyTracked").addEventListener("click", async () => {
         const html = buildCopyHtmlTracked(lastParts);
         const ok = await copyHtmlToClipboard(html);
         if (ok) showCopyFeedback("✓ Copied (tracked changes).", "Ready." + lastSummary);
         else setStatus("Copy failed. Browser said no.", true);
       });
- 
+
       $("#copyHard").addEventListener("click", async () => {
         const html = buildCopyHtmlHard(lastParts);
         const ok = await copyHtmlToClipboard(html);
         if (ok) showCopyFeedback("✓ Copied (hard formatting).", "Ready." + lastSummary);
         else setStatus("Copy failed. Browser said no.", true);
       });
- 
+
       $("#copyClean").addEventListener("click", async () => {
         const text = buildCleanText(lastParts);
         const ok = await copyTextToClipboard(text);
         if (ok) showCopyFeedback("✓ Copied (clean, changes accepted).", "Ready." + lastSummary);
         else setStatus("Copy failed. Browser said no.", true);
       });
- 
+
       document.addEventListener("keydown", async (e) => {
         if (e.key === "F5" || (e.ctrlKey && e.key === "Enter")){
           e.preventDefault();
@@ -1470,8 +1367,8 @@ function tokenize(text, mode){
           else setStatus("Copy failed. Browser said no.", true);
         }
       });
- 
- 
+
+
       $("#genDocx").addEventListener("click", async () => {
         try{
           if (!window.JSZip){
@@ -1485,16 +1382,13 @@ function tokenize(text, mode){
           setStatus("Failed to generate .docx: " + (e?.message || String(e)), true);
         }
       });
- 
+
       refresh();
       setStatus("Ready.");
     }
- 
+
     // Defer init until JSZip is present (but don't be dramatic about it).
     window.addEventListener("load", init);
   </script>
 </body>
 </html>
- 
-
-
